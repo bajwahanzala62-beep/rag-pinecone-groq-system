@@ -194,6 +194,9 @@ if uploaded_files:
         except InvalidPDFError as e:
             progress.empty()
             st.error(str(e))
+        except RuntimeError as e:
+            progress.empty()
+            st.error(f"Embedding error while processing '{uploaded.name}': {e}")
         except Exception as e:
             progress.empty()
             st.error(f"Unexpected error processing '{uploaded.name}': {e}")

@@ -25,15 +25,15 @@ class Config:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
-    # Embeddings
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-    EMBEDDING_DIM = 384  # fixed dimension for all-MiniLM-L6-v2
+    # Embeddings (Pinecone-hosted Inference API -- see src/embeddings.py)
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "multilingual-e5-large")
+    EMBEDDING_DIM = 1024  # fixed dimension for multilingual-e5-large
 
     # Chunking defaults (overridable from the UI)
     DEFAULT_CHUNK_SIZE = 500       # characters
     DEFAULT_CHUNK_OVERLAP = 50     # characters
     DEFAULT_TOP_K = 4
-    DEFAULT_SIM_THRESHOLD = 0.35   # cosine similarity cutoff
+    DEFAULT_SIM_THRESHOLD = 0.15   # cosine similarity cutoff (tuned for multilingual-e5-large)
 
     @classmethod
     def validate(cls):

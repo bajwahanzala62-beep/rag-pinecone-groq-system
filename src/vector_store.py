@@ -85,8 +85,13 @@ class VectorStore:
 
         # Batch upserts (Pinecone recommends <= 100 vectors per request)
         batch_size = 100
-        for i in range(0, len(payload), batch_size):
-            self.index.upsert(vectors=payload[i:i + batch_size], namespace=namespace)
+        try:
+            for i in range(0, len(payload), batch_size):
+                self.index.upsert(vectors=payload[i:i + batch_size], namespace=namespace)
+        except Exception as e:
+            raise PineconeConnectionError(
+                f"Failed to upsert vectors to Pinecone (namespace '{namespace}'): {e}"
+            )
 
     def query(
         self,

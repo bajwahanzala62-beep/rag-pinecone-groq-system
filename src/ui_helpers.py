@@ -15,8 +15,8 @@ from src.retriever import RetrievedChunk
 
 APP_AUTHOR = "Hanzala Bajwa"
 
-HIGH_THRESHOLD = 0.60
-MEDIUM_THRESHOLD = 0.40
+HIGH_THRESHOLD = 0.35
+MEDIUM_THRESHOLD = 0.20
 
 
 def confidence_label(score: float) -> str:
