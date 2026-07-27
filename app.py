@@ -111,6 +111,11 @@ with st.sidebar:
         sim_threshold = st.slider("Similarity threshold", 0.0, 1.0, Config.DEFAULT_SIM_THRESHOLD, 0.05)
         page_filter_input = st.text_input("Filter by page number (optional)", "")
 
+    with st.expander("Ingestion previews", expanded=False):
+        show_text_preview = st.checkbox("Show extracted text preview", value=True)
+        show_embedding_preview = st.checkbox("Show embedding preview", value=True)
+        preview_chars = st.slider("Text preview length (characters)", 200, 3000, 800, 100)
+
     st.divider()
     st.subheader("📚 Indexed documents")
     if st.session_state.indexed_docs:
@@ -143,6 +148,64 @@ def get_vector_store() -> VectorStore:
 
 
 # ---------------------------------------------------------------------
+# Enhancement: extraction + embedding preview helpers
+# Defensive getters — tolerate `pages` being either dicts or simple
+# objects, depending on what extract_pages() returns in src/pdf_processor.py
+# ---------------------------------------------------------------------
+def _page_text(p) -> str:
+    if isinstance(p, dict):
+        return p.get("text", "") or ""
+    return getattr(p, "text", "") or (p if isinstance(p, str) else "")
+
+
+def _page_number(p, fallback_idx: int):
+    if isinstance(p, dict):
+        return p.get("page_number", fallback_idx + 1)
+    return getattr(p, "page_number", fallback_idx + 1)
+
+
+def render_text_preview(pages, max_chars: int):
+    """Enhancement: show extracted PDF text as soon as it's parsed."""
+    total_chars = sum(len(_page_text(p)) for p in pages)
+    st.caption(f"📝 Extracted {len(pages)} page(s), {total_chars:,} characters total.")
+    shown = 0
+    for i, p in enumerate(pages):
+        text = _page_text(p).strip()
+        if not text:
+            continue
+        remaining = max_chars - shown
+        if remaining <= 0:
+            st.caption("…preview truncated (increase preview length in sidebar to see more).")
+            break
+        snippet = text[:remaining]
+        shown += len(snippet)
+        st.markdown(f"**Page {_page_number(p, i)}**")
+        st.text(snippet + ("…" if len(text) > len(snippet) else ""))
+
+
+def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_shown: int = 3):
+    """Enhancement: show a preview of the generated embedding vectors."""
+    if not vectors:
+        st.caption("No embeddings generated.")
+        return
+    dim = len(vectors[0])
+    st.caption(f"🧩 Generated {len(vectors)} embedding(s), dimension = {dim}.")
+    for c, v in list(zip(chunks, vectors))[:n_chunks_shown]:
+        label = f"Chunk {getattr(c, 'chunk_index', '?')} — Page {getattr(c, 'page_number', '?')}"
+        with st.expander(label):
+            preview_text = getattr(c, "text", "")[:200]
+            st.text(preview_text + ("…" if len(getattr(c, "text", "")) > 200 else ""))
+            head = list(v[:n_dims_shown])
+            st.write(f"First {len(head)} of {dim} dimensions:")
+            st.dataframe(
+                {"dim": list(range(len(head))), "value": [round(float(x), 5) for x in head]},
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.bar_chart(data={"value": [float(x) for x in head]})
+
+
+# ---------------------------------------------------------------------
 # 1. PDF Upload + Indexing
 # ---------------------------------------------------------------------
 st.subheader("1️⃣ Upload PDF(s)")
@@ -166,6 +229,10 @@ if uploaded_files:
             file_bytes = uploaded.read()
             pages = extract_pages(file_bytes, uploaded.name)
 
+            if show_text_preview:
+                with st.expander(f"📝 Extracted text preview — {uploaded.name}", expanded=True):
+                    render_text_preview(pages, preview_chars)
+
             progress.progress(40, text="Chunking text...")
             chunks = chunk_document(
                 pages, doc_name=uploaded.name,
@@ -174,6 +241,10 @@ if uploaded_files:
 
             progress.progress(60, text="Generating embeddings...")
             vectors = embed_texts([c.text for c in chunks])
+
+            if show_embedding_preview:
+                with st.expander(f"🧩 Embedding preview — {uploaded.name}", expanded=False):
+                    render_embedding_preview(chunks, vectors)
 
             progress.progress(85, text="Storing vectors in Pinecone...")
             try:
