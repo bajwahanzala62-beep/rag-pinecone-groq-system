@@ -187,22 +187,23 @@ def _page_number(p, fallback_idx: int):
 
 
 def render_text_preview(pages, max_chars: int):
-    """Enhancement: show extracted PDF text, page by page, as soon as it's parsed."""
+    """Enhancement: show extracted PDF text, page by page, in a scrollable box."""
     total_chars = sum(len(_page_text(p)) for p in pages)
     st.caption(f"📝 Extracted {len(pages)} page(s), {total_chars:,} characters total.")
-    shown = 0
-    for i, p in enumerate(pages):
-        text = _page_text(p).strip()
-        if not text:
-            continue
-        remaining = max_chars - shown
-        if remaining <= 0:
-            st.caption("…preview truncated (increase preview length in sidebar to see more).")
-            break
-        snippet = text[:remaining]
-        shown += len(snippet)
-        st.markdown(f"**Page {_page_number(p, i)}**")
-        st.text(snippet + ("…" if len(text) > len(snippet) else ""))
+    with st.container(height=400, border=True):
+        shown = 0
+        for i, p in enumerate(pages):
+            text = _page_text(p).strip()
+            if not text:
+                continue
+            remaining = max_chars - shown
+            if remaining <= 0:
+                st.caption("…preview truncated (increase preview length in sidebar to see more).")
+                break
+            snippet = text[:remaining]
+            shown += len(snippet)
+            st.markdown(f"**Page {_page_number(p, i)}**")
+            st.text(snippet + ("…" if len(text) > len(snippet) else ""))
 
 
 def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_shown: int = 3):
@@ -231,13 +232,15 @@ def render_chunks_list(chunks):
     """
     Enhancement: full list of every text chunk generated from the
     document, each individually expandable — "Chunk 1", "Chunk 2", ...
-    showing the page it came from and its full text content.
+    shown in a scrollable box so large documents (many chunks) don't
+    turn into an endlessly long page.
     """
     st.caption(f"Total Chunks: {len(chunks)}")
-    for i, c in enumerate(chunks, start=1):
-        page = getattr(c, "page_number", "?")
-        with st.expander(f"Chunk {i} — Page {page}"):
-            st.text(getattr(c, "text", ""))
+    with st.container(height=500, border=True):
+        for i, c in enumerate(chunks, start=1):
+            page = getattr(c, "page_number", "?")
+            with st.expander(f"Chunk {i} — Page {page}"):
+                st.text(getattr(c, "text", ""))
 
 
 # ---------------------------------------------------------------------
