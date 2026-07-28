@@ -186,16 +186,28 @@ def _page_number(p, fallback_idx: int):
 
 
 def render_text_preview(pages):
-    """Enhancement: show the FULL extracted PDF text, page by page, in a scrollable box."""
+    """Enhancement: show the FULL extracted PDF text in a scrollable, word-wrapping box."""
     total_chars = sum(len(_page_text(p)) for p in pages)
     st.caption(f"📝 Extracted {len(pages)} page(s), {total_chars:,} characters total.")
-    with st.container(height=400, border=True):
-        for i, p in enumerate(pages):
-            text = _page_text(p).strip()
-            if not text:
-                continue
-            st.markdown(f"**Page {_page_number(p, i)}**")
-            st.text(text)
+
+    parts = []
+    for i, p in enumerate(pages):
+        text = _page_text(p).strip()
+        if not text:
+            continue
+        parts.append(f"--- Page {_page_number(p, i)} ---\n{text}")
+    full_text = "\n\n".join(parts)
+
+    # st.text_area wraps long lines and scrolls internally -- unlike
+    # st.text inside a plain container, which does NOT wrap and just
+    # gets cut off at the container's edge for long unbroken lines.
+    st.text_area(
+        label="Extracted text",
+        value=full_text,
+        height=400,
+        disabled=True,
+        label_visibility="collapsed",
+    )
 
 
 def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_shown: int = 3):
@@ -215,7 +227,7 @@ def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_s
         with st.container(border=True):
             st.markdown(f"**{label}**")
             preview_text = getattr(c, "text", "")[:200]
-            st.text(preview_text + ("…" if len(getattr(c, "text", "")) > 200 else ""))
+            st.write(preview_text + ("…" if len(getattr(c, "text", "")) > 200 else ""))
             head = list(v[:n_dims_shown])
             st.write(f"First {len(head)} of {dim} dimensions:")
             st.dataframe(
@@ -232,7 +244,8 @@ def render_chunks_list(chunks):
     document, shown in a scrollable box. Uses bordered containers (not
     expanders) for each chunk, since app.py already wraps this whole
     section inside an outer expander -- Streamlit does not allow
-    expanders nested inside expanders.
+    expanders nested inside expanders. Uses text_area (not st.text) so
+    long unbroken lines actually word-wrap instead of getting cut off.
     """
     st.caption(f"Total Chunks: {len(chunks)}")
     with st.container(height=500, border=True):
@@ -240,7 +253,14 @@ def render_chunks_list(chunks):
             page = getattr(c, "page_number", "?")
             with st.container(border=True):
                 st.markdown(f"**Chunk {i} — Page {page}**")
-                st.text(getattr(c, "text", ""))
+                st.text_area(
+                    label=f"chunk_{i}_text",
+                    value=getattr(c, "text", ""),
+                    height=120,
+                    disabled=True,
+                    label_visibility="collapsed",
+                    key=f"chunk_preview_{i}_{page}",
+                )
 
 
 # ---------------------------------------------------------------------
