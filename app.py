@@ -116,7 +116,6 @@ with st.sidebar:
     with st.expander("Ingestion previews", expanded=False):
         show_text_preview = st.checkbox("Show extracted text preview", value=True)
         show_embedding_preview = st.checkbox("Show embedding preview", value=True)
-        preview_chars = st.slider("Text preview length (characters)", 200, 3000, 800, 100)
 
     st.divider()
 
@@ -186,28 +185,26 @@ def _page_number(p, fallback_idx: int):
     return getattr(p, "page_number", fallback_idx + 1)
 
 
-def render_text_preview(pages, max_chars: int):
-    """Enhancement: show extracted PDF text, page by page, in a scrollable box."""
+def render_text_preview(pages):
+    """Enhancement: show the FULL extracted PDF text, page by page, in a scrollable box."""
     total_chars = sum(len(_page_text(p)) for p in pages)
     st.caption(f"📝 Extracted {len(pages)} page(s), {total_chars:,} characters total.")
     with st.container(height=400, border=True):
-        shown = 0
         for i, p in enumerate(pages):
             text = _page_text(p).strip()
             if not text:
                 continue
-            remaining = max_chars - shown
-            if remaining <= 0:
-                st.caption("…preview truncated (increase preview length in sidebar to see more).")
-                break
-            snippet = text[:remaining]
-            shown += len(snippet)
             st.markdown(f"**Page {_page_number(p, i)}**")
-            st.text(snippet + ("…" if len(text) > len(snippet) else ""))
+            st.text(text)
 
 
 def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_shown: int = 3):
-    """Enhancement: show a preview of the generated embedding vectors."""
+    """
+    Enhancement: show a preview of the generated embedding vectors.
+    Uses bordered containers (not expanders) for each chunk, since this
+    is itself displayed inside an outer expander in app.py, and
+    Streamlit does not allow expanders nested inside expanders.
+    """
     if not vectors:
         st.caption("No embeddings generated.")
         return
@@ -215,7 +212,8 @@ def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_s
     st.caption(f"🧩 Generated {len(vectors)} embedding(s), dimension = {dim}.")
     for c, v in list(zip(chunks, vectors))[:n_chunks_shown]:
         label = f"Chunk {getattr(c, 'chunk_index', '?')} — Page {getattr(c, 'page_number', '?')}"
-        with st.expander(label):
+        with st.container(border=True):
+            st.markdown(f"**{label}**")
             preview_text = getattr(c, "text", "")[:200]
             st.text(preview_text + ("…" if len(getattr(c, "text", "")) > 200 else ""))
             head = list(v[:n_dims_shown])
@@ -231,15 +229,17 @@ def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_s
 def render_chunks_list(chunks):
     """
     Enhancement: full list of every text chunk generated from the
-    document, each individually expandable — "Chunk 1", "Chunk 2", ...
-    shown in a scrollable box so large documents (many chunks) don't
-    turn into an endlessly long page.
+    document, shown in a scrollable box. Uses bordered containers (not
+    expanders) for each chunk, since app.py already wraps this whole
+    section inside an outer expander -- Streamlit does not allow
+    expanders nested inside expanders.
     """
     st.caption(f"Total Chunks: {len(chunks)}")
     with st.container(height=500, border=True):
         for i, c in enumerate(chunks, start=1):
             page = getattr(c, "page_number", "?")
-            with st.expander(f"Chunk {i} — Page {page}"):
+            with st.container(border=True):
+                st.markdown(f"**Chunk {i} — Page {page}**")
                 st.text(getattr(c, "text", ""))
 
 
@@ -269,8 +269,8 @@ if uploaded_files:
             total_chars = sum(len(_page_text(p)) for p in pages)
 
             if show_text_preview:
-                with st.expander(f"📝 Extracted text preview — {uploaded.name}", expanded=True):
-                    render_text_preview(pages, preview_chars)
+                st.markdown(f"**📝 Extracted text preview — {uploaded.name}**")
+                render_text_preview(pages)
 
             progress.progress(40, text="Chunking text...")
             chunks = chunk_document(
@@ -282,8 +282,8 @@ if uploaded_files:
             vectors = embed_texts([c.text for c in chunks])
 
             if show_embedding_preview:
-                with st.expander(f"🧩 Embedding preview — {uploaded.name}", expanded=False):
-                    render_embedding_preview(chunks, vectors)
+                st.markdown(f"**🧩 Embedding preview — {uploaded.name}**")
+                render_embedding_preview(chunks, vectors)
 
             progress.progress(85, text="Storing vectors in Pinecone...")
             try:
