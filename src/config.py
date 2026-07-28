@@ -30,9 +30,9 @@ class Config:
     EMBEDDING_DIM = 1024  # fixed dimension for multilingual-e5-large
 
     # Chunking defaults (overridable from the UI)
-    DEFAULT_CHUNK_SIZE = 500       # characters
-    DEFAULT_CHUNK_OVERLAP = 50     # characters
-    DEFAULT_TOP_K = 4
+    DEFAULT_CHUNK_SIZE = 350       # characters (smaller = more focused chunks)
+    DEFAULT_CHUNK_OVERLAP = 60     # characters
+    DEFAULT_TOP_K = 6              # cast a wider net before the similarity gate
     DEFAULT_SIM_THRESHOLD = 0.15   # cosine similarity cutoff (tuned for multilingual-e5-large)
 
     @classmethod

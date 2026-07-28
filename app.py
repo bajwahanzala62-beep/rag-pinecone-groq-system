@@ -80,6 +80,8 @@ defaults = {
     "last_query_time": 0.0,     # Enhancement: rate limiting
     "is_processing": False,
     "last_result": None,        # keeps last Q&A on screen after rerun
+    "doc_stats": {},            # Enhancement: per-document extraction/chunk/embedding stats
+    "doc_chunks": {},           # Enhancement: full chunk list per document, for the Text Chunks view
 }
 for key, value in defaults.items():
     if key not in st.session_state:
@@ -117,6 +119,24 @@ with st.sidebar:
         preview_chars = st.slider("Text preview length (characters)", 200, 3000, 800, 100)
 
     st.divider()
+
+    # -------------------------------------------------------------
+    # Statistics panel — shows stats for the most recently processed
+    # document (Characters / Chunks / Embeddings), mirroring a classic
+    # ingestion dashboard.
+    # -------------------------------------------------------------
+    st.subheader("📊 Statistics")
+    if st.session_state.doc_stats:
+        latest_doc = list(st.session_state.doc_stats.keys())[-1]
+        stats = st.session_state.doc_stats[latest_doc]
+        st.caption(f"Latest document: {latest_doc}")
+        st.metric("Characters", f"{stats['characters']:,}")
+        st.metric("Chunks", stats["chunks"])
+        st.metric("Embeddings", stats["embeddings"])
+    else:
+        st.info("Upload a document to see statistics.")
+
+    st.divider()
     st.subheader("📚 Indexed documents")
     if st.session_state.indexed_docs:
         selected_docs = st.multiselect(
@@ -128,6 +148,8 @@ with st.sidebar:
             st.session_state.indexed_docs = []
             st.session_state.query_history = []
             st.session_state.last_result = None
+            st.session_state.doc_stats = {}
+            st.session_state.doc_chunks = {}
             st.rerun()
     else:
         selected_docs = []
@@ -165,7 +187,7 @@ def _page_number(p, fallback_idx: int):
 
 
 def render_text_preview(pages, max_chars: int):
-    """Enhancement: show extracted PDF text as soon as it's parsed."""
+    """Enhancement: show extracted PDF text, page by page, as soon as it's parsed."""
     total_chars = sum(len(_page_text(p)) for p in pages)
     st.caption(f"📝 Extracted {len(pages)} page(s), {total_chars:,} characters total.")
     shown = 0
@@ -205,6 +227,19 @@ def render_embedding_preview(chunks, vectors, n_dims_shown: int = 12, n_chunks_s
             st.bar_chart(data={"value": [float(x) for x in head]})
 
 
+def render_chunks_list(chunks):
+    """
+    Enhancement: full list of every text chunk generated from the
+    document, each individually expandable — "Chunk 1", "Chunk 2", ...
+    showing the page it came from and its full text content.
+    """
+    st.caption(f"Total Chunks: {len(chunks)}")
+    for i, c in enumerate(chunks, start=1):
+        page = getattr(c, "page_number", "?")
+        with st.expander(f"Chunk {i} — Page {page}"):
+            st.text(getattr(c, "text", ""))
+
+
 # ---------------------------------------------------------------------
 # 1. PDF Upload + Indexing
 # ---------------------------------------------------------------------
@@ -228,6 +263,7 @@ if uploaded_files:
             progress.progress(15, text="Extracting text from PDF...")
             file_bytes = uploaded.read()
             pages = extract_pages(file_bytes, uploaded.name)
+            total_chars = sum(len(_page_text(p)) for p in pages)
 
             if show_text_preview:
                 with st.expander(f"📝 Extracted text preview — {uploaded.name}", expanded=True):
@@ -259,6 +295,15 @@ if uploaded_files:
             time.sleep(0.3)
             progress.empty()
 
+            # Save stats + full chunk list for the Statistics panel and
+            # the Text Chunks section below.
+            st.session_state.doc_stats[uploaded.name] = {
+                "characters": total_chars,
+                "chunks": len(chunks),
+                "embeddings": len(vectors),
+            }
+            st.session_state.doc_chunks[uploaded.name] = chunks
+
             st.session_state.indexed_docs.append(uploaded.name)
             st.success(f"✅ Indexed '{uploaded.name}' — {len(chunks)} chunks stored.")
 
@@ -271,6 +316,16 @@ if uploaded_files:
         except Exception as e:
             progress.empty()
             st.error(f"Unexpected error processing '{uploaded.name}': {e}")
+
+# ---------------------------------------------------------------------
+# 1b. Text Chunks — full list for the most recently processed document
+# ---------------------------------------------------------------------
+if st.session_state.doc_chunks:
+    latest_doc_for_chunks = list(st.session_state.doc_chunks.keys())[-1]
+    st.subheader("🧩 Text Chunks")
+    st.caption(f"Showing chunks for: {latest_doc_for_chunks}")
+    with st.expander("View all chunks", expanded=False):
+        render_chunks_list(st.session_state.doc_chunks[latest_doc_for_chunks])
 
 st.divider()
 
